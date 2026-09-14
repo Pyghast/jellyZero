@@ -1,175 +1,98 @@
 /*
  * SPDX-FileCopyrightText: 2026 M5Stack Technology CO LTD
- *
  * SPDX-License-Identifier: MIT
  */
-
 #include "apple_screen.h"
-
 #include "asset_manager.h"
 #include "bindings.h"
+#include <algorithm>
+#include <cctype>
+#include <string>
 
 namespace screen {
 namespace {
-
-struct AppleTextFontBinding {
-    lv_font_t* regular;
-    lv_font_t* bold;
-};
-
-constexpr const char* kIconKbFn          = "\uE080";
-constexpr const char* kIconKbH           = "\uE084";
-constexpr const char* kIconKbJ           = "\uE08C";
-constexpr const char* kIconKbPrintScreen = "\uE0B1";
-constexpr const char* kIconKbHelp        = "\uEA28";
-
-void cleanup_font_binding(lv_event_t* event) {
-    delete static_cast<AppleTextFontBinding*>(lv_event_get_user_data(event));
+std::string lowercase(const char* text) {
+    std::string result(text);
+    std::transform(result.begin(), result.end(), result.begin(),
+        [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+    return result;
+}
 }
 
-void apple_text_font_observer(lv_observer_t* observer, lv_subject_t* subject) {
-    auto* label = lv_observer_get_target_obj(observer);
-    auto* fonts = static_cast<AppleTextFontBinding*>(lv_observer_get_user_data(observer));
-    if (!label || !fonts) {
-        return;
-    }
-
-    auto* font = lv_subject_get_int(subject) ? fonts->bold : fonts->regular;
-    lv_obj_set_style_text_font(label, font ? font : &lv_font_montserrat_20, 0);
-}
-
-void info_visible_observer(lv_observer_t* observer, lv_subject_t* subject) {
-    auto* label = lv_observer_get_target_obj(observer);
-    if (!label) {
-        return;
-    }
-
-    if (lv_subject_get_int(subject)) {
-        lv_obj_remove_flag(label, LV_OBJ_FLAG_HIDDEN);
-    }
-    else {
-        lv_obj_add_flag(label, LV_OBJ_FLAG_HIDDEN);
-    }
-}
-
-} // namespace
-
-AppleScreen::AppleScreen(viewmodel::BaseViewModel& view_model, app::AssetManager& assets)
-    : BaseScreen(view_model, assets) {
-    init();
-}
+AppleScreen::AppleScreen(viewmodel::BaseViewModel& vm, app::AssetManager& assets)
+    : BaseScreen(vm, assets) { init(); }
 
 void AppleScreen::build_content(lv_obj_t* content) {
-    auto* group = lv_obj_create(content);
-    lv_obj_remove_style_all(group);
-    lv_obj_set_size(group, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
-    lv_obj_set_flex_flow(group, LV_FLEX_FLOW_COLUMN);
-    lv_obj_set_flex_align(group, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-    lv_obj_set_style_pad_row(group, 4, 0);
-    lv_obj_clear_flag(group, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_center(group);
-
-    auto* hello = lv_label_create(group);
-    lv_label_bind_text(hello, view_model().greeting_subject(), nullptr);
-    auto* fonts = new AppleTextFontBinding{
-        assets().load_standard_font(20, app::StandardFontWeight::Regular),
-        assets().load_standard_font(20),
+    // Reference layout: 216px player, divider, 92px queue in the 110px body.
+    auto make_label = [&](const char* text, int x, int y, int width, int size) {
+        auto* obj = lv_label_create(content);
+        lv_label_set_text(obj, text);
+        lv_obj_set_pos(obj, x, y);
+        lv_obj_set_width(obj, width);
+        lv_label_set_long_mode(obj, LV_LABEL_LONG_DOT);
+        auto* font = assets().load_standard_font(size, app::StandardFontWeight::Regular);
+        const lv_font_t* fallback = size >= 20 ? &lv_font_montserrat_20
+            : size >= 14 ? &lv_font_montserrat_14
+            : size >= 11 ? &lv_font_montserrat_12 : &lv_font_montserrat_10;
+        const auto* chosen_font = font ? font : fallback;
+        lv_obj_set_style_text_font(obj, chosen_font, 0);
+        lv_obj_set_height(obj, chosen_font->line_height);
+        reactive::bind_theme(obj, view_model().dark_mode_subject(), reactive::ThemeRole::Text);
+        return obj;
     };
-    auto* initial_font = lv_subject_get_int(view_model().bold_text_subject()) ? fonts->bold : fonts->regular;
-    lv_obj_set_style_text_font(hello, initial_font ? initial_font : &lv_font_montserrat_20, 0);
-    lv_obj_add_event_cb(hello, cleanup_font_binding, LV_EVENT_DELETE, fonts);
-    lv_subject_add_observer_obj(view_model().bold_text_subject(), apple_text_font_observer, hello, fonts);
-    reactive::bind_theme(hello, view_model().dark_mode_subject(), reactive::ThemeRole::Text);
+    title_ = make_label("", 9, 6, 204, 20);
+    artist_ = make_label("", 9, 30, 111, 14);
+    album_ = make_label("", 9, 46, 111, 10);
+    status_ = make_label("", 10, 58, 110, 10);
+    elapsed_ = make_label("", 10, 91, 103, 10);
+    lv_obj_set_style_text_align(elapsed_, LV_TEXT_ALIGN_CENTER, 0);
 
-    auto* info = lv_label_create(group);
-    lv_label_set_text_fmt(info, "LVGL v%d.%d.%d", LVGL_VERSION_MAJOR, LVGL_VERSION_MINOR, LVGL_VERSION_PATCH);
-    auto* info_font = assets().load_standard_font(12, app::StandardFontWeight::Regular);
-    lv_obj_set_style_text_font(info, info_font ? info_font : &lv_font_montserrat_12, 0);
-    if (!lv_subject_get_int(view_model().info_visible_subject())) {
-        lv_obj_add_flag(info, LV_OBJ_FLAG_HIDDEN);
-    }
-    lv_subject_add_observer_obj(view_model().info_visible_subject(), info_visible_observer, info, nullptr);
-    reactive::bind_theme(info, view_model().dark_mode_subject(), reactive::ThemeRole::Text);
+    progress_ = lv_bar_create(content);
+    lv_obj_set_pos(progress_, 10, 71);
+    lv_obj_set_size(progress_, 102, 12);
+    lv_obj_set_style_radius(progress_, LV_RADIUS_CIRCLE, LV_PART_MAIN);
+    lv_obj_set_style_radius(progress_, LV_RADIUS_CIRCLE, LV_PART_INDICATOR);
+    lv_obj_set_style_bg_color(progress_, lv_color_hex(0xe4e4e8), LV_PART_MAIN);
+    lv_obj_set_style_bg_opa(progress_, LV_OPA_COVER, LV_PART_MAIN);
+    lv_obj_set_style_bg_color(progress_, lv_color_hex(0x483cde), LV_PART_INDICATOR);
 
-    auto* hints = lv_obj_create(group);
-    lv_obj_remove_style_all(hints);
-    lv_obj_set_size(hints, 220, 50);
-    lv_obj_set_flex_flow(hints, LV_FLEX_FLOW_COLUMN);
-    lv_obj_set_flex_align(hints,
-                          LV_FLEX_ALIGN_CENTER,
-                          LV_FLEX_ALIGN_CENTER,
-                          LV_FLEX_ALIGN_CENTER);
-    lv_obj_set_style_pad_row(hints, 2, 0);
-    lv_obj_add_flag(hints, LV_OBJ_FLAG_OVERFLOW_VISIBLE);
-    lv_obj_clear_flag(hints, LV_OBJ_FLAG_SCROLLABLE);
+    artwork_ = lv_image_create(content);
+    const auto path = assets().resolve("images/demo-reference-cover.png");
+    const std::string source = "A:" + path.generic_string();
+    lv_image_set_src(artwork_, source.c_str());
+    lv_obj_set_pos(artwork_, 128, 35);
 
-    auto* key_icon_font = assets().load_font("kenney_input_keyboard_and_mouse.ttf", 34);
-    auto* extra_key_icon_font = assets().load_font("kenny_keyboard_extra.ttf", 34);
-    auto* hint_font = assets().load_standard_font(11, app::StandardFontWeight::Regular);
-    const auto add_hint = [&](const char* letter_icon,
-                              const char* letter_fallback,
-                              const char* action_icon,
-                              const char* action_fallback,
-                              const lv_font_t* action_font,
-                              const char* description_text) {
-        auto* item = lv_obj_create(hints);
-        lv_obj_remove_style_all(item);
-        lv_obj_set_size(item, 196, 24);
-        lv_obj_set_flex_flow(item, LV_FLEX_FLOW_ROW);
-        lv_obj_set_flex_align(item,
-                              LV_FLEX_ALIGN_START,
-                              LV_FLEX_ALIGN_CENTER,
-                              LV_FLEX_ALIGN_CENTER);
-        lv_obj_set_style_pad_column(item, 4, 0);
-        lv_obj_add_flag(item, LV_OBJ_FLAG_OVERFLOW_VISIBLE);
-        lv_obj_clear_flag(item, LV_OBJ_FLAG_SCROLLABLE);
-
-        const auto add_key = [&](const char* icon,
-                                 const char* fallback,
-                                 const lv_font_t* icon_font) {
-            auto* key = lv_obj_create(item);
-            lv_obj_remove_style_all(key);
-            lv_obj_set_size(key, 26, 24);
-            lv_obj_add_flag(key, LV_OBJ_FLAG_OVERFLOW_VISIBLE);
-            lv_obj_clear_flag(key, LV_OBJ_FLAG_SCROLLABLE);
-
-            auto* icon_label = lv_label_create(key);
-            lv_label_set_text(icon_label, icon_font ? icon : fallback);
-            lv_obj_set_style_text_font(icon_label,
-                                       icon_font ? icon_font : &lv_font_montserrat_12,
-                                       0);
-            lv_obj_align(icon_label, LV_ALIGN_CENTER, 0, icon_font ? -3 : 0);
-            reactive::bind_theme(icon_label,
-                                 view_model().dark_mode_subject(),
-                                 reactive::ThemeRole::Text);
-        };
-
-        const auto add_text = [&](const char* text) {
-            auto* label = lv_label_create(item);
-            lv_label_set_text(label, text);
-            lv_obj_set_style_text_font(label,
-                                       hint_font ? hint_font : &lv_font_montserrat_12,
-                                       0);
-            reactive::bind_theme(label,
-                                 view_model().dark_mode_subject(),
-                                 reactive::ThemeRole::Text);
-        };
-
-        add_key(kIconKbFn, "FN", key_icon_font);
-        add_text("+");
-        add_key(letter_icon, letter_fallback, key_icon_font);
-        add_text("=");
-        add_key(action_icon, action_fallback, action_font);
-        add_text(description_text);
-    };
-
-    add_hint(kIconKbH, "H", kIconKbHelp, "?", extra_key_icon_font, "Help");
-    add_hint(kIconKbJ,
-             "J",
-             kIconKbPrintScreen,
-             "PRSC",
-             key_icon_font,
-             "Screenshot");
+    auto* divider = lv_obj_create(content);
+    lv_obj_remove_style_all(divider);
+    lv_obj_set_pos(divider, 217, 4);
+    lv_obj_set_size(divider, 1, 100);
+    lv_obj_set_style_bg_color(divider, lv_color_hex(0xaaaaB6), 0);
+    lv_obj_set_style_bg_opa(divider, LV_OPA_COVER, 0);
+    lv_obj_remove_flag(divider, LV_OBJ_FLAG_SCROLLABLE);
+    auto* heading = make_label("queue", 226, 3, 86, 20);
+    lv_obj_set_style_text_align(heading, LV_TEXT_ALIGN_RIGHT, 0);
+    for (size_t i = 0; i < queue_.size(); ++i)
+        queue_[i] = make_label("", 227, 26 + static_cast<int>(i) * 15, 86, 11);
+    reactive::observe_obj(content, view_model().music_subject(), music_changed_cb, this);
 }
 
+void AppleScreen::refresh() {
+    const auto& music = view_model().music();
+    const auto& track = music.current_track();
+    lv_label_set_text(title_, lowercase(track.title).c_str());
+    lv_label_set_text(artist_, lowercase(track.artist).c_str());
+    lv_label_set_text(album_, lowercase(track.album).c_str());
+    lv_label_set_text_fmt(elapsed_, "%02d:%02d / %d:%02d", music.elapsed_seconds() / 60,
+        music.elapsed_seconds() % 60, track.duration_seconds / 60, track.duration_seconds % 60);
+    lv_bar_set_range(progress_, 0, track.duration_seconds);
+    lv_bar_set_value(progress_, music.elapsed_seconds(), LV_ANIM_OFF);
+    lv_label_set_text_fmt(status_, "%d%%", music.volume());
+    for (size_t i = 0; i < queue_.size(); ++i)
+        lv_label_set_text_fmt(queue_[i], "%u %s", static_cast<unsigned>(i + 1),
+            lowercase(music.queued_track(i).title).c_str());
+}
+
+void AppleScreen::music_changed_cb(lv_observer_t* observer, lv_subject_t*) {
+    static_cast<AppleScreen*>(lv_observer_get_user_data(observer))->refresh();
+}
 } // namespace screen

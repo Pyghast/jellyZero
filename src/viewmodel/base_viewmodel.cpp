@@ -113,6 +113,45 @@ void BaseViewModel::request_quit() {
     quit_requested_subject_.set(true);
 }
 
+bool BaseViewModel::handle_music_key(uint32_t key, bool long_pressed) {
+    if (current_page() == model::AppPage::Butter) {
+        // Consume held keys without repeating one-shot actions.
+        switch (key) {
+            case '4': case LV_KEY_UP: case LV_KEY_LEFT:
+                if (!long_pressed) device_cursor_ = (device_cursor_ + model::FakeMusicProvider::device_count - 1) % model::FakeMusicProvider::device_count;
+                break;
+            case '6': case LV_KEY_DOWN: case LV_KEY_RIGHT:
+                if (!long_pressed) device_cursor_ = (device_cursor_ + 1) % model::FakeMusicProvider::device_count;
+                break;
+            case '5': case LV_KEY_ENTER:
+                if (!long_pressed) { music_.select_device(device_cursor_); show_apple_page(); }
+                break;
+            case '7': case LV_KEY_ESC:
+                if (!long_pressed) show_apple_page();
+                break;
+            default: return false;
+        }
+        if (!long_pressed) music_changed_.notify();
+        return true;
+    }
+    switch (key) {
+        case '4': if (!long_pressed) request_quit(); break;
+        case '5': if (!long_pressed) music_.previous(); break;
+        case '6': if (!long_pressed) music_.toggle_playback(); break;
+        case '7': if (!long_pressed) music_.next(); break;
+        case '8':
+            if (!long_pressed) { device_cursor_ = music_.device_index(); show_butter_page(); }
+            break;
+        case LV_KEY_LEFT: if (!long_pressed) music_.seek_by(-10); break;
+        case LV_KEY_RIGHT: if (!long_pressed) music_.seek_by(10); break;
+        case LV_KEY_UP: if (!long_pressed) music_.change_volume(5); break;
+        case LV_KEY_DOWN: if (!long_pressed) music_.change_volume(-5); break;
+        default: return false;
+    }
+    if (!long_pressed) music_changed_.notify();
+    return true;
+}
+
 void BaseViewModel::publish_all() {
     title_subject_.set(model_.app_title());
     greeting_subject_.set(model_.greeting());

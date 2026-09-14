@@ -6,14 +6,14 @@
 
 include(GNUInstallDirs)
 
-set(APP_DISPLAY_NAME "TemplateApp" CACHE STRING "Human-readable application name used by launchers and package filename")
+set(APP_DISPLAY_NAME "JellyZero" CACHE STRING "Human-readable application name used by launchers and package filename")
 set(APP_DEBIAN_REVISION "m5stack1" CACHE STRING "Debian package revision/vendor suffix")
 set(APP_DEBIAN_ARCHITECTURE "arm64" CACHE STRING "Debian package architecture")
 # Deliberately a placeholder: the store rejects packages whose Maintainer is
 # still a template/M5Stack identity, so set your own name and email here.
 set(APP_MAINTAINER "TODO Your Name <todo@example.invalid>" CACHE STRING "Debian package maintainer")
 set(APP_PACKAGE_DESCRIPTION "CardputerZero LVGL template application" CACHE STRING "Debian package summary")
-set(APP_INSTALL_SYSTEMD_SERVICE ON CACHE BOOL "Install a systemd service file for embedded deployments")
+set(APP_INSTALL_SYSTEMD_SERVICE OFF CACHE BOOL "Install a systemd service file for embedded deployments")
 
 set(APP_GENERATED_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated/package")
 configure_file(
@@ -38,22 +38,22 @@ install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/config/template-app.conf"
     DESTINATION "/etc"
 )
 
-install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/assets/audio/"
-    DESTINATION "${CMAKE_INSTALL_DATADIR}/${APP_NAME}/audio"
-    PATTERN ".DS_Store" EXCLUDE
-)
-install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/assets/fonts/"
+# Device package: keep only runtime assets, not the desktop shell or abandoned demos.
+install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/assets/fonts/Phosphor-Fill.ttf"
     DESTINATION "${CMAKE_INSTALL_DATADIR}/${APP_NAME}/fonts"
-    PATTERN ".DS_Store" EXCLUDE
 )
-install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/assets/images/"
+install(FILES
+    "${CMAKE_CURRENT_SOURCE_DIR}/assets/images/demo-reference-cover.png"
+    "${CMAKE_CURRENT_SOURCE_DIR}/assets/images/jellyzero.png"
+    "${CMAKE_CURRENT_SOURCE_DIR}/assets/images/jellyzero_80.png"
+    "${CMAKE_CURRENT_SOURCE_DIR}/assets/images/jellyzero_100.png"
     DESTINATION "${CMAKE_INSTALL_DATADIR}/${APP_NAME}/images"
-    PATTERN ".DS_Store" EXCLUDE
 )
-install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/assets/images/"
+install(FILES
+    "${CMAKE_CURRENT_SOURCE_DIR}/assets/images/jellyzero.png"
+    "${CMAKE_CURRENT_SOURCE_DIR}/assets/images/jellyzero_80.png"
+    "${CMAKE_CURRENT_SOURCE_DIR}/assets/images/jellyzero_100.png"
     DESTINATION "${CMAKE_INSTALL_DATADIR}/APPLaunch/share/images"
-    FILES_MATCHING
-    PATTERN "template*.png"
 )
 
 install(FILES "${APP_GENERATED_DIR}/${PROJECT_NAME}.desktop"

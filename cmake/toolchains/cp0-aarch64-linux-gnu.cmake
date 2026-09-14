@@ -18,6 +18,14 @@ set(_CP0_DEFAULT_SYSROOT "${_CP0_CACHE_DIR}/sdk_bsp-src")
 set(CM0_SDK_ROOT "${_CP0_DEFAULT_SYSROOT}" CACHE PATH "Path to CM0/CardputerZero BSP sysroot")
 set(CM0_SDK_VERSION "v0.0.4" CACHE STRING "CM0/CardputerZero BSP release version")
 set(CM0_SDK_URL "https://github.com/CardputerZero/M5CardputerZero-UserDemo/releases/download/${CM0_SDK_VERSION}/sdk_bsp.tar.gz" CACHE STRING "CM0/CardputerZero BSP archive URL")
+# GitHub release asset digest for sdk_bsp.tar.gz from the v0.0.4 release.
+# Custom BSP releases must provide their independently verified digest explicitly.
+if(CM0_SDK_VERSION STREQUAL "v0.0.4")
+    set(_CP0_DEFAULT_SDK_SHA256 "e51b6eb803ed08f450e459efbfe62dd0341440846f3be9d01da861fe6cfdebb0")
+else()
+    set(_CP0_DEFAULT_SDK_SHA256 "")
+endif()
+set(CM0_SDK_SHA256 "${_CP0_DEFAULT_SDK_SHA256}" CACHE STRING "Expected BSP archive SHA-256")
 set(CM0_ALLOW_FETCH_DEPS ON CACHE BOOL "Allow downloading the CM0/CardputerZero BSP when the sysroot is missing")
 
 # CMAKE_SYSROOT must exist before project() runs, otherwise CMake's compiler ABI
@@ -35,10 +43,16 @@ if(NOT EXISTS "${CM0_SDK_ROOT}")
     file(MAKE_DIRECTORY "${_CP0_SYSROOT_PARENT}")
     set(_CP0_SDK_ARCHIVE "${_CP0_CACHE_DIR}/sdk_bsp.tar.gz")
 
+    string(LENGTH "${CM0_SDK_SHA256}" _CP0_HASH_LENGTH)
+    if(NOT _CP0_HASH_LENGTH EQUAL 64 OR NOT CM0_SDK_SHA256 MATCHES "^[0-9a-fA-F]+$")
+        message(FATAL_ERROR "Set CM0_SDK_SHA256 to a verified SHA-256 before downloading a BSP")
+    endif()
     message(STATUS "CM0 SDK sysroot missing, downloading BSP: ${CM0_SDK_URL}")
     file(DOWNLOAD
         "${CM0_SDK_URL}"
         "${_CP0_SDK_ARCHIVE}"
+        EXPECTED_HASH "SHA256=${CM0_SDK_SHA256}"
+        TLS_VERIFY ON
         SHOW_PROGRESS
         STATUS _CP0_DOWNLOAD_STATUS
         TIMEOUT 300

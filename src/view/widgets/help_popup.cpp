@@ -22,17 +22,17 @@ struct HelpRow {
 };
 
 constexpr std::array<HelpRow, 5> kAppleRows = {{
-    {"HOLD ESC / 4", "Exit"},
-    {"5", "Text weight"},
-    {"6", "Light / dark"},
-    {"7", "Version info"},
-    {"8", "Open counter"},
+    {"5 / 6 / 7", "Prev / Play-pause / Next"},
+    {"8", "Demo devices"},
+    {"LEFT/RIGHT", "Seek -/+10 seconds"},
+    {"UP/DOWN", "Volume +/-5%"},
+    {"4 / ESC*", "Exit (*hold ESC)"},
 }};
 
 constexpr std::array<HelpRow, 3> kButterRows = {{
-    {"ESC", "Back to home"},
-    {"Z / LEFT", "Decrease"},
-    {"C / RIGHT", "Increase"},
+    {"ESC / 7", "Back (cancel)"},
+    {"4 / 6", "Previous / next device"},
+    {"5 / ENTER", "Select device"},
 }};
 
 } // namespace
@@ -157,7 +157,7 @@ bool HelpPopup::visible() const {
 
 void HelpPopup::update_rows(model::AppPage page) {
     const bool butter = page == model::AppPage::Butter;
-    lv_label_set_text(page_badge_, butter ? "COUNTER" : "HOME");
+    lv_label_set_text(page_badge_, butter ? "DEVICES" : "PLAYBACK");
     for (std::size_t i = 0; i < rows_.size(); ++i) {
         const bool row_visible = butter ? i < kButterRows.size() : i < kAppleRows.size();
         if (!row_visible) {

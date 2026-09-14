@@ -4,9 +4,9 @@ Treat these values as related but distinct:
 
 | Value | Typical form | Purpose |
 | --- | --- | --- |
-| Display name | `TemplateApp` | Launcher and package filename. |
-| Project/executable name | `template_app` | CMake target and installed binary. |
-| Upload package name | `template_app` | `app-builder.json` upload identifier. |
+| Display name | `JellyZero` | Launcher and package filename. |
+| Project/executable name | `jellyzero` | CMake target and installed binary. |
+| Upload package name | `jellyzero` | `app-builder.json` upload identifier. |
 | Config identity | `template-app` | Config filename and per-user directory. |
 | Icon basename | `template` | Runtime and APPLaunch images. |
 

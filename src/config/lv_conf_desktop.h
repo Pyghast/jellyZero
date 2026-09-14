@@ -179,7 +179,7 @@
    PERFORMANCE MONITOR
  *====================*/
 
-#define LV_USE_PERF_MONITOR                1
+#define LV_USE_PERF_MONITOR                0
 #define LV_USE_SYSMON                      1
 
 /*====================

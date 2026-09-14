@@ -115,7 +115,9 @@
 #define LV_USE_LIBJPEG_TURBO               0
 #define LV_USE_TJPGD                       1
 
-#define LV_IMAGE_CACHE_DEF_SIZE            16
+// LVGL 9 cache size is in bytes; the 64x68 ARGB8888 cover needs 17,408.
+#define LV_CACHE_DEF_SIZE                  (64U * 1024U)
+#define LV_IMAGE_HEADER_CACHE_DEF_CNT      8
 
 /*====================
    THEMES

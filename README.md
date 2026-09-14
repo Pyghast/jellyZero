@@ -1,3 +1,12 @@
+# JellyZero
+
+**v0.0.1: local Spotify-controller UI prototype.** Fake metadata and devices;
+no real Spotify connection or audio playback yet. See [controls, build and tests](docs/v0.0.1.md).
+Store submission metadata below remains scaffold material, not a publishable release.
+See the [security and efficiency review](docs/v0.0.1-audit.md) for verified checks and remaining hardware/release gates.
+
+---
+
 <p align="center">
   <picture>
     <source
@@ -104,7 +113,7 @@ Common CMake cache options:
 | Option | Default | Description |
 | --- | --- | --- |
 | `USE_DESKTOP` | `ON` | Build SDL desktop simulator when `ON`; build embedded Linux target when `OFF`. |
-| `APP_NAME` | `template_app` | Application name used by installed asset lookup. |
+| `APP_NAME` | `jellyzero` | Application name used by installed asset lookup. |
 | `APP_ASSETS_ROOT` | empty | Optional runtime asset root. Expected layout includes `fonts/`, `images/`, etc. |
 | `APP_CONFIG_FILE` | platform default | Optional config path. Defaults to `config/template-app.conf` for desktop builds and `/etc/template-app.conf` for device builds. |
 | `APP_KEY_INPUT_DEVICE` | empty | Optional Linux evdev device path, e.g. `/dev/input/event0`. Empty means auto-scan `/dev/input/event*`. |
@@ -190,9 +199,9 @@ cmake --build --preset linux-x86-64-dbg
 Run:
 
 ```shell
-./build/linux-x86-64/Debug/template_app
+./build/linux-x86-64/Debug/jellyzero
 # or launch release build
-# ./build/linux-x86-64/Release/template_app
+# ./build/linux-x86-64/Release/jellyzero
 ```
 
 ### macOS Desktop
@@ -235,9 +244,9 @@ cmake --build --preset darwin-arm64-dbg
 Run:
 
 ```shell
-./build/darwin-arm64/Debug/template_app
+./build/darwin-arm64/Debug/jellyzero
 # or launch release build
-# ./build/darwin-arm64/Release/template_app
+# ./build/darwin-arm64/Release/jellyzero
 ```
 
 For Intel macOS, use the `darwin-x86-64` configure preset and matching build preset:
@@ -247,9 +256,9 @@ cmake --preset darwin-x86-64
 cmake --build --preset darwin-x86-64-dbg
 # alternatively, you can run release build
 # cmake --build --preset darwin-x86-64-rel
-./build/darwin-x86-64/Debug/template_app
+./build/darwin-x86-64/Debug/jellyzero
 # or launch release build
-# ./build/darwin-x86-64/Release/template_app
+# ./build/darwin-x86-64/Release/jellyzero
 ```
 
 ### Windows Desktop
@@ -315,11 +324,11 @@ Configure and build with MSVC:
 ```powershell
 cmake --preset win32-msvc
 cmake --build --preset win32-msvc-dbg
-.\build\msvc\Debug\template_app.exe
+.\build\msvc\Debug\jellyzero.exe
 
 # alternatively for release build
 # cmake --build --preset win32-msvc-rel
-# .\build\msvc\Release\template_app.exe
+# .\build\msvc\Release\jellyzero.exe
 ```
 
 Configure and build with MinGW-w64:
@@ -344,11 +353,11 @@ Configure and build with MinGW-w64:
 ```powershell
 cmake --preset win32-mingw64
 cmake --build --preset win32-mingw64-dbg
-.\build\mingw64\Debug\template_app.exe
+.\build\mingw64\Debug\jellyzero.exe
 
 # alternatively for release build
 # cmake --build --preset win32-mingw64-rel
-#.\build\mingw64\Release\template_app.exe
+#.\build\mingw64\Release\jellyzero.exe
 ```
 > [!NOTE]
 > `VCPKG` will handle the dependencies during CMake configuration process automatically, 
@@ -402,7 +411,7 @@ By default, the debian package is copied to '$HOME' folder, normally it's under 
 On your device, install the copied package with `apt` and replace the package file name with the one you copied:
 
 ```shell
-sudo apt install --no-install-recommends ./TemplateApp_0.2.1_m5stack1_arm64.deb
+sudo apt install --no-install-recommends ./JellyZero_0.2.1_m5stack1_arm64.deb
 ```
 
 
@@ -478,20 +487,20 @@ Debian packages are produced with CPack and written to `dist/`. The package file
 Default example:
 
 ```text
-dist/TemplateApp_0.2.1_m5stack1_arm64.deb
+dist/JellyZero_0.2.1_m5stack1_arm64.deb
 ```
 
 Package layout:
 
 | Path | Content |
 | --- | --- |
-| `/usr/bin/template_app` | Application executable. |
+| `/usr/bin/jellyzero` | Application executable. |
 | `/etc/template-app.conf` | System-default application settings, including the startup theme. |
-| `/usr/share/template_app/` | Runtime assets: fonts, images, audio. |
-| `/usr/share/APPLaunch/applications/template_app.desktop` | APPLaunch launcher entry. |
-| `/usr/share/APPLaunch/share/images/template*.png` | APPLaunch launcher icons/fallbacks. |
-| `/usr/lib/systemd/system/template_app.service` | Optional systemd service for embedded autostart. |
-| `/usr/share/doc/template_app/` | README and third-party asset license notes. |
+| `/usr/share/jellyzero/` | Runtime assets: fonts, images, audio. |
+| `/usr/share/APPLaunch/applications/jellyzero.desktop` | APPLaunch launcher entry. |
+| `/usr/share/APPLaunch/share/images/jellyzero*.png` | APPLaunch launcher icons/fallbacks. |
+| `/usr/lib/systemd/system/jellyzero.service` | Optional systemd service for embedded autostart. |
+| `/usr/share/doc/jellyzero/` | README and third-party asset license notes. |
 
 Build and package:
 

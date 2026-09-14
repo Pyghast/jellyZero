@@ -1,8 +1,8 @@
 {
-  "app_name": "Template",
-  "package_name": "template_app",
-  "version": "0.2.1",
-  "description": "Template Application for CardputerZero",
+  "app_name": "JellyZero",
+  "package_name": "jellyzero",
+  "version": "0.0.1",
+  "description": "Local Spotify controller UI prototype for CardputerZero",
 
   "store": {
     "summary": "TODO: one line about your app (placeholders are auto-rejected)",
@@ -12,7 +12,7 @@
       "screenshot/app-simulator-dark-darwin.png",
       "screenshot/app-simulator-light-darwin.png"
     ],
-    "icon": "assets/images/template.png",
+    "icon": "assets/images/jellyzero.png",
     "license": "TODO: an SPDX id, e.g. MIT",
     "source_repo": "https://github.com/CardputerZero/Template",
     "author": { "github": "TODO-your-github-login", "display_name": "TODO: Your Name" },

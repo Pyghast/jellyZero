@@ -69,7 +69,6 @@ size_t nav_key_to_index(uint32_t key) {
 
     switch (key) {
         case '4':
-        case LV_KEY_ESC:
             return 0;
         case '5':
             return 1;
@@ -187,6 +186,13 @@ uint32_t map_evdev_key(uint16_t code) {
     switch (code) {
         case KEY_ESC:
             return LV_KEY_ESC;
+        case KEY_ENTER:
+        case KEY_KPENTER:
+            return LV_KEY_ENTER;
+        case KEY_UP:
+            return LV_KEY_UP;
+        case KEY_DOWN:
+            return LV_KEY_DOWN;
         case KEY_LEFT:
             return LV_KEY_LEFT;
         case KEY_RIGHT:

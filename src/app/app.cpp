@@ -169,13 +169,8 @@ private:
             return true;
         }
 
-        const bool is_escape = key == LV_KEY_ESC;
-        const bool is_home_exit_key =
-            key == '4' &&
-            ((!long_pressed && view_model_.current_page() == model::AppPage::Apple) ||
-             (long_pressed && exit_key_pressed_ == key));
-        if (!is_escape && !is_home_exit_key) {
-            return false;
+        if (key != LV_KEY_ESC) {
+            return view_model_.handle_music_key(key, long_pressed);
         }
 
         if (long_pressed) {

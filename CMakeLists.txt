@@ -6,7 +6,7 @@
 
 cmake_minimum_required(VERSION 3.31)
 
-project(template_app VERSION 0.2.1 LANGUAGES C CXX)
+project(jellyzero VERSION 0.0.1 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -52,8 +52,8 @@ set(LV_BUILD_CONF_PATH "${PROJECT_SOURCE_DIR}/src/config/lv_conf.h" CACHE PATH "
 FetchContent_Declare(
     lvgl
     GIT_REPOSITORY https://github.com/lvgl/lvgl.git
-    GIT_TAG        v9.5.0
-    GIT_SHALLOW    TRUE
+    GIT_TAG        85aa60d18b3d5e5588d7b247abf90198f07c8a63 # v9.5.0
+    GIT_SHALLOW    FALSE
 )
 FetchContent_GetProperties(lvgl)
 if(NOT lvgl_POPULATED)
@@ -304,8 +304,8 @@ else()
         FetchContent_Declare(
             fmt
             GIT_REPOSITORY https://github.com/fmtlib/fmt.git
-            GIT_TAG        10.1.1
-            GIT_SHALLOW    TRUE
+            GIT_TAG        f5e54359df4c26b6230fc61d38aa294581393084 # 10.1.1
+            GIT_SHALLOW    FALSE
         )
         set(FMT_INSTALL OFF CACHE BOOL "Disable fmt install rules for app packages" FORCE)
         set(FMT_TEST OFF CACHE BOOL "Disable fmt tests" FORCE)
@@ -631,3 +631,27 @@ target_link_libraries(${PROJECT_NAME}
 
 # Package deb
 include(cmake/cm0-package.cmake)
+
+
+# Local LVGL integration tests; no network, SDL window or hardware required.
+include(CTest)
+if(BUILD_TESTING AND USE_DESKTOP)
+    add_executable(jellyzero_ui_tests tests/ui_tests.cpp)
+    target_link_libraries(jellyzero_ui_tests PRIVATE ${PROJECT_NAME}_core)
+    add_test(NAME jellyzero_ui COMMAND jellyzero_ui_tests)
+    set_tests_properties(jellyzero_ui PROPERTIES WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
+
+    add_executable(jellyzero_png_error_tests tests/png_error_test.cpp)
+    target_link_libraries(jellyzero_png_error_tests PRIVATE lvgl PNG::PNG)
+    add_test(NAME jellyzero_png_error COMMAND jellyzero_png_error_tests
+        "${CMAKE_CURRENT_BINARY_DIR}/png-error-regression.png")
+
+    find_package(Python3 QUIET COMPONENTS Interpreter)
+    if(Python3_Interpreter_FOUND AND CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+        add_test(NAME jellyzero_evdev_enter COMMAND "${Python3_EXECUTABLE}"
+            "${CMAKE_CURRENT_SOURCE_DIR}/tests/evdev_enter_test.py"
+            --lvgl-dir "${LVGL_SOURCE_DIR}")
+        set_tests_properties(jellyzero_evdev_enter PROPERTIES
+            WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
+    endif()
+endif()

@@ -8,6 +8,7 @@
 
 #include "subjects.h"
 #include "base_model.h"
+#include "fake_music_provider.h"
 
 #include "lvgl.h"
 
@@ -30,6 +31,11 @@ public:
     lv_subject_t* info_visible_subject();
     lv_subject_t* quit_requested_subject();
 
+    lv_subject_t* music_subject() { return music_changed_.native(); }
+    int device_cursor() const { return device_cursor_; }
+    bool handle_music_key(uint32_t key, bool long_pressed = false);
+    const model::FakeMusicProvider& music() const { return music_; }
+
     bool is_dark_mode() const;
     void set_dark_mode(bool enabled);
     void toggle_dark_mode();
@@ -48,6 +54,9 @@ private:
     void publish_all();
 
     model::BaseModel model_;
+    model::FakeMusicProvider music_;
+    reactive::IntSubject music_changed_{0};
+    int device_cursor_{0};
     reactive::StringSubject<32> title_subject_;
     reactive::StringSubject<32> greeting_subject_;
     reactive::BoolSubject dark_mode_subject_;
