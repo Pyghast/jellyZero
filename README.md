@@ -1,7 +1,12 @@
 # JellyZero
 
-**v0.0.1: local Spotify-controller UI prototype.** Fake metadata and devices;
-no real Spotify connection or audio playback yet. See [controls, build and tests](docs/v0.0.1.md).
+**v0.0.3: Cardputer Zero Spotify controller.** Real Spotify sign-in (PKCE,
+no Client Secret on the device) and live playback control — the Now Playing
+screen shows your actual current track, cover art, and progress, and the
+physical keys drive real play/pause/skip/seek/volume against your account.
+Jellyfin is still an offline placeholder. See [Spotify setup](docs/spotify-setup.md)
+to connect your account, and [controls, build and tests](docs/v0.0.1.md) for the
+underlying UI/build docs.
 Store submission metadata below remains scaffold material, not a publishable release.
 See the [security and efficiency review](docs/v0.0.1-audit.md) for verified checks and remaining hardware/release gates.
 
@@ -61,10 +66,16 @@ In this example project, we used small MVVM-style structure around LVGL:
 - **Data flow**: user input triggers widget callbacks, callbacks update `BaseViewModel`, view model publishes subjects, and bound UI objects refresh automatically through LVGL observers.
 - **Platform layer**: platform code owns Linux input integration and other hardware-facing services. The nav bar maps hardware/keyboard keys `4` to `8`, plus `ESC` for quit.
 
-Current demo UI:
+Current UI:
 
-- Page 1: Hello World, font weight toggle, LVGL version info, light/dark theme toggle, page navigation.
-- Page 2: Counter page, increment/decrement actions, simple page navigation.
+- **Now Playing (Apple screen)**: title/artist/album, progress bar, volume, and cover art. Shows
+  real, live Spotify data once signed in; otherwise an offline demo preview, including a
+  five-item queue (Spotify's real queue isn't fetched yet, so the queue panel stays blank while
+  Spotify is the live source).
+- **Source picker (Butter screen)**: choose between Spotify and Jellyfin. Spotify's row shows
+  real sign-in status ("Signed in as `<name>`" or "sign-in not configured"); Jellyfin stays a
+  placeholder ("server not configured").
+- Light/dark theme toggle and page navigation remain from the base template.
 
 ## Repository Layout
 
@@ -75,19 +86,21 @@ Current demo UI:
 │   ├── audio/              # Audio resources
 │   ├── fonts/              # TTF fonts loaded through FreeType
 │   └── images/             # Image resources
+├── docs/                   # Setup/audit docs, incl. spotify-setup.md
 ├── screenshot/             # Simulator screenshots for supported desktop platforms
 ├── src/
 │   ├── app/                # Application lifecycle, asset loading, screen management
 │   ├── config/             # LVGL config headers for desktop and device builds
 │   ├── logger/             # Project logging wrapper
-│   ├── model/              # Base application data model
-│   ├── platform/           # Platform input/hardware integration
+│   ├── model/              # App data model, Spotify token store/API client/provider
+│   ├── platform/           # Platform input/hardware integration, user config directory
 │   ├── reactive/           # LVGL observer subjects and binding helpers
 │   ├── view/               # Theme, UI constants, screens, and widgets
 │   │   ├── screens/        # Page-level LVGL screens
 │   │   └── widgets/        # Reusable LVGL widgets such as nav bar and icon button
 │   ├── viewmodel/          # BaseViewModel and UI-facing actions/state subjects
 │   └── main.cpp            # Program entry point
+├── tools/                  # spotify_login.py — one-time PKCE sign-in helper (run on your PC)
 ├── CMakeLists.txt          # Build graph, dependencies, options, targets
 ├── CMakePresets.json       # Desktop/device configure and build presets
 └── README.md
@@ -101,6 +114,9 @@ Current demo UI:
 - `src/config/lv_conf_desktop.h`: desktop LVGL rendering settings.
 - `src/config/lv_conf_cm0.h`: embedded Linux/CardputerZero LVGL settings.
 - `src/platform/linux_input.*`: Linux evdev keypad support and desktop SDL keyboard routing for nav buttons.
+- `src/platform/user_config.*`: resolves the per-user writable config directory (desktop `config/`, or `$XDG_CONFIG_HOME`/`~/.config/template-app` on device) used for `template-app.conf` and Spotify's `tokens.json`.
+- `src/model/music_provider.h`: shared playback interface implemented by both `FakeMusicProvider` (offline preview / Jellyfin placeholder) and `SpotifyMusicProvider`, so screens don't need to know which backend is active.
+- `src/model/spotify_token_store.*`, `spotify_api_client.*`, `spotify_music_provider.*`: token file load/save/expiry, the Spotify Web API client (curl + nlohmann/json), and the background worker that signs in, polls playback, and executes transport commands off the LVGL thread. See [docs/spotify-setup.md](docs/spotify-setup.md).
 - `src/reactive/subjects.*`: typed wrappers around LVGL subjects.
 - `src/reactive/bindings.*`: helper bindings for labels, theme, widget values, flags, states, and events.
 - `src/view/widgets/navbar.*`: bottom navigation bar and icon-button action mapping.
@@ -156,6 +172,8 @@ Current dependencies info:
 | zlib | `1.3.1` | System package manager or `vcpkg.json` override | Compression dependency used by image libraries. |
 | SDL2 | `2.32.54` | System package manager or `vcpkg.json` override | Desktop simulator display and input backend. |
 | FreeType | `2.13.3` | System package manager or `vcpkg.json` override | Runtime TTF font rendering. |
+| curl | latest (unpinned) | System package manager or `vcpkg.json` | HTTPS client for the Spotify Web API. |
+| nlohmann-json | latest (unpinned) | System package manager or `vcpkg.json` | JSON parsing for Spotify tokens/API responses. |
 
 > Windows vcpkg installs use the versions above through manifest mode, with the registry baseline pinned in `vcpkg-configuration.json`.
 
@@ -174,7 +192,9 @@ sudo apt install -y \
   libfmt-dev \
   libsdl2-dev \
   libfreetype-dev \
-  zlib1g-dev
+  zlib1g-dev \
+  libcurl4-openssl-dev \
+  nlohmann-json3-dev
 ```
 
 > [!NOTE]
@@ -224,7 +244,9 @@ brew install \
   sdl2 \
   freetype \
   dpkg \
-  zlib
+  zlib \
+  curl \
+  nlohmann-json
 ```
 
 Configure for Apple Silicon:
@@ -369,6 +391,12 @@ This preset builds an aarch64 Linux target from a host machine with an `aarch64-
 The BSP at `.cache/sdk_bsp-src` is treated as a sysroot: headers, libraries, startup objects, and pkg-config metadata are resolved from that directory first.
 If that directory does not exist on the first configure, the toolchain downloads and extracts `sdk_bsp.tar.gz` automatically before CMake runs compiler checks.
 
+> [!NOTE]
+> Spotify support needs `libcurl` and `nlohmann/json.hpp` available in the BSP sysroot
+> (a `libcurl4-openssl-dev`/`nlohmann-json3-dev` equivalent). Unlike `fmt`, there's no
+> FetchContent fallback for these — configure fails with a clear error naming what's missing.
+> See [docs/spotify-setup.md](docs/spotify-setup.md).
+
 Install a cross compile toolchain:
 
 + Debian
@@ -419,24 +447,29 @@ sudo apt install --no-install-recommends ./JellyZero_0.2.1_m5stack1_arm64.deb
 
 ### Navigation Keys
 
-The first page bottom nav bar maps hardware/keyboard keys from left to right:
-
-| Key | Nav item |
-| --- | --- |
-| `4` | First icon button |
-| `5` | Second icon button |
-| `6` | Third icon button |
-| `7` | Fourth icon button |
-| `8` | Fifth icon button |
-| `ESC` | First icon button / quit |
-
-The counter page uses direct keyboard shortcuts:
+**Now Playing (Apple) screen:**
 
 | Key | Action |
 | --- | --- |
-| `ESC` | Return to the first page |
-| `Left` | Decrease the counter |
-| `Right` | Increase the counter |
+| `4` / hold `ESC` | Exit |
+| `5` | Previous track |
+| `6` | Play / pause |
+| `7` | Next track |
+| `8` | Open source picker |
+| `Left` / `Right` | Seek -/+10 seconds |
+| `Fn+A` / `Fn+S` / `Fn+D` | Mute / volume down / volume up |
+| `Fn+Q` / `Fn+W` / `Fn+E` | Play-pause / previous / next (aliases for `6`/`5`/`7`) |
+
+**Source picker (Butter) screen:**
+
+| Key | Action |
+| --- | --- |
+| `4` / `6` | Previous / next source |
+| `5` / `Enter` | Select source |
+| `7` / `ESC` | Back |
+
+Once signed in, all playback keys drive the real Spotify Web API when Spotify is the selected
+source; otherwise they control the offline demo preview.
 
 ### Adding a Screen
 
