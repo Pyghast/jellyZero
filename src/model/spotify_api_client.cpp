@@ -26,13 +26,6 @@ std::size_t write_to_string(char* data, std::size_t size, std::size_t count, voi
     return size * count;
 }
 
-struct CurlHandle {
-    CURL* handle{curl_easy_init()};
-    ~CurlHandle() {
-        if (handle) curl_easy_cleanup(handle);
-    }
-};
-
 std::string url_encode(CURL* curl, const std::string& value) {
     char* escaped = curl_easy_escape(curl, value.c_str(), static_cast<int>(value.size()));
     std::string result = escaped ? escaped : value;
@@ -45,6 +38,9 @@ bool perform(CURL* curl, std::string& response_body, long& status_code, std::str
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response_body);
     curl_easy_setopt(curl, CURLOPT_TIMEOUT, kTimeoutSeconds);
     curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
+    // Handle is reused across polls (see spotify_api_client.h); keepalive
+    // helps the kept-open TCP connection survive the gaps between them.
+    curl_easy_setopt(curl, CURLOPT_TCP_KEEPALIVE, 1L);
 
     const auto result = curl_easy_perform(curl);
     if (result != CURLE_OK) {
@@ -85,13 +81,12 @@ std::string smallest_artwork_url(const nlohmann::json& images) {
 
 } // namespace
 
-bool spotify_refresh_access_token(SpotifyTokens& tokens, std::string& error) {
-    CurlHandle curl_handle;
-    if (!curl_handle.handle) {
-        error = "failed to init curl";
+bool spotify_refresh_access_token(CURL* curl, SpotifyTokens& tokens, std::string& error) {
+    if (!curl) {
+        error = "curl handle not initialized";
         return false;
     }
-    auto* curl = curl_handle.handle;
+    curl_easy_reset(curl);
 
     const std::string body = "grant_type=refresh_token"
                               "&refresh_token=" + url_encode(curl, tokens.refresh_token) +
@@ -139,13 +134,12 @@ bool spotify_refresh_access_token(SpotifyTokens& tokens, std::string& error) {
     return true;
 }
 
-bool spotify_fetch_profile(const SpotifyTokens& tokens, SpotifyProfile& profile, std::string& error) {
-    CurlHandle curl_handle;
-    if (!curl_handle.handle) {
-        error = "failed to init curl";
+bool spotify_fetch_profile(CURL* curl, const SpotifyTokens& tokens, SpotifyProfile& profile, std::string& error) {
+    if (!curl) {
+        error = "curl handle not initialized";
         return false;
     }
-    auto* curl = curl_handle.handle;
+    curl_easy_reset(curl);
 
     curl_easy_setopt(curl, CURLOPT_URL, kProfileUrl);
     curl_easy_setopt(curl, CURLOPT_HTTPGET, 1L);
@@ -180,13 +174,12 @@ bool spotify_fetch_profile(const SpotifyTokens& tokens, SpotifyProfile& profile,
     return true;
 }
 
-bool spotify_fetch_playback_state(const SpotifyTokens& tokens, SpotifyPlaybackState& state, std::string& error) {
-    CurlHandle curl_handle;
-    if (!curl_handle.handle) {
-        error = "failed to init curl";
+bool spotify_fetch_playback_state(CURL* curl, const SpotifyTokens& tokens, SpotifyPlaybackState& state, std::string& error) {
+    if (!curl) {
+        error = "curl handle not initialized";
         return false;
     }
-    auto* curl = curl_handle.handle;
+    curl_easy_reset(curl);
 
     curl_easy_setopt(curl, CURLOPT_URL, kPlayerUrl);
     curl_easy_setopt(curl, CURLOPT_HTTPGET, 1L);
@@ -261,14 +254,13 @@ bool spotify_fetch_playback_state(const SpotifyTokens& tokens, SpotifyPlaybackSt
     return true;
 }
 
-bool spotify_player_command(const SpotifyTokens& tokens, const std::string& method,
+bool spotify_player_command(CURL* curl, const SpotifyTokens& tokens, const std::string& method,
                              const std::string& path_and_query, std::string& error) {
-    CurlHandle curl_handle;
-    if (!curl_handle.handle) {
-        error = "failed to init curl";
+    if (!curl) {
+        error = "curl handle not initialized";
         return false;
     }
-    auto* curl = curl_handle.handle;
+    curl_easy_reset(curl);
 
     const std::string url = std::string(kPlayerUrl) + path_and_query;
     curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
@@ -305,13 +297,12 @@ bool spotify_player_command(const SpotifyTokens& tokens, const std::string& meth
     return false;
 }
 
-bool spotify_download_artwork(const std::string& url, const std::filesystem::path& dest, std::string& error) {
-    CurlHandle curl_handle;
-    if (!curl_handle.handle) {
-        error = "failed to init curl";
+bool spotify_download_artwork(CURL* curl, const std::string& url, const std::filesystem::path& dest, std::string& error) {
+    if (!curl) {
+        error = "curl handle not initialized";
         return false;
     }
-    auto* curl = curl_handle.handle;
+    curl_easy_reset(curl);
 
     curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
     curl_easy_setopt(curl, CURLOPT_HTTPGET, 1L);

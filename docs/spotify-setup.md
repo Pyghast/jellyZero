@@ -72,6 +72,12 @@ what's missing — there's no automatic fallback for these like there is for
 `fmt`, since cross-compiling curl and its TLS backend is a project of its
 own.
 
+At runtime, curl also needs a CA certificate bundle on the device (usually
+`/etc/ssl/certs/ca-certificates.crt`, from the `ca-certificates` package) to
+verify Spotify's TLS certificate — JellyZero never disables certificate
+verification. If that bundle is missing, every Spotify call fails and the
+Butter screen shows a sign-in error mentioning a certificate problem.
+
 ## Re-authenticating
 
 Access tokens expire after about an hour; JellyZero refreshes them silently

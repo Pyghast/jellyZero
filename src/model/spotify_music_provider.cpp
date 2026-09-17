@@ -12,7 +12,10 @@
 #include "lvgl.h"
 
 #include <algorithm>
+#include <cctype>
 #include <chrono>
+#include <system_error>
+#include <vector>
 
 namespace model {
 namespace {
@@ -20,9 +23,50 @@ namespace {
 constexpr auto kPollInterval = std::chrono::seconds(3);
 constexpr int kSeekStepMs = 10000;
 constexpr int kVolumeStepPercent = 5;
+// Keep the on-disk artwork cache bounded on limited flash/storage — this is
+// well above how many distinct tracks a normal listening session touches,
+// so pruning is rare, but it stops years of uptime from growing it forever.
+constexpr std::size_t kMaxCachedArtworkFiles = 40;
+
+std::filesystem::path artwork_cache_dir() {
+    return platform::user_config_dir() / "spotify-art-cache";
+}
+
+// Spotify track ids are a fixed base62 alphabet; reject anything else
+// before it becomes part of a filesystem path. Defense in depth against a
+// malformed/tampered API response steering a write outside the cache dir
+// (e.g. via "../"), even though a real Spotify response would never do this.
+bool is_safe_track_id(const std::string& track_id) {
+    if (track_id.empty()) return false;
+    return std::all_of(track_id.begin(), track_id.end(), [](unsigned char c) {
+        return std::isalnum(c);
+    });
+}
 
 std::filesystem::path artwork_cache_path(const std::string& track_id) {
-    return platform::user_config_dir() / "spotify-art-cache" / (track_id + ".jpg");
+    return artwork_cache_dir() / (track_id + ".jpg");
+}
+
+// Deletes the least-recently-modified cached art files once the cache
+// exceeds kMaxCachedArtworkFiles. Best-effort: failures are silently
+// ignored, since a stale/oversized cache is a cosmetic problem, not a
+// functional one.
+void prune_artwork_cache() {
+    std::error_code error;
+    std::vector<std::filesystem::directory_entry> entries;
+    for (const auto& entry : std::filesystem::directory_iterator(artwork_cache_dir(), error)) {
+        if (entry.is_regular_file()) entries.push_back(entry);
+    }
+    if (entries.size() <= kMaxCachedArtworkFiles) return;
+
+    std::sort(entries.begin(), entries.end(), [](const auto& a, const auto& b) {
+        std::error_code time_error;
+        return a.last_write_time(time_error) < b.last_write_time(time_error);
+    });
+    const auto excess = entries.size() - kMaxCachedArtworkFiles;
+    for (std::size_t i = 0; i < excess; ++i) {
+        std::filesystem::remove(entries[i], error);
+    }
 }
 
 } // namespace
@@ -51,6 +95,12 @@ SpotifyMusicProvider::~SpotifyMusicProvider() {
     if (worker_.joinable()) {
         worker_.join();
     }
+    // Only safe once the worker thread (the handle's sole owner/user) has
+    // fully exited above.
+    if (curl_) {
+        curl_easy_cleanup(curl_);
+        curl_ = nullptr;
+    }
     // The worker may have queued a callback for a tick that never ran
     // (e.g. app shutting down); don't let it fire into a destroyed object.
     lv_async_call_cancel(&SpotifyMusicProvider::deliver_result, this);
@@ -70,9 +120,20 @@ void SpotifyMusicProvider::worker_main() {
         return;
     }
 
+    // One handle for this thread's entire lifetime (see spotify_api_client.h)
+    // instead of paying a fresh TCP+TLS handshake on every single call.
+    curl_ = curl_easy_init();
+    if (!curl_) {
+        std::lock_guard<std::mutex> lock(mutex_);
+        auth_state_ = AuthState::Error;
+        error_message_ = "failed to init curl";
+        lv_async_call(&SpotifyMusicProvider::deliver_result, this);
+        return;
+    }
+
     bool ok = true;
     if (spotify_tokens_need_refresh(tokens_)) {
-        ok = spotify_refresh_access_token(tokens_, error);
+        ok = spotify_refresh_access_token(curl_, tokens_, error);
         if (ok) {
             std::string save_error;
             save_spotify_tokens(spotify_token_file_path(), tokens_, save_error);
@@ -82,7 +143,7 @@ void SpotifyMusicProvider::worker_main() {
     std::string display_name;
     if (ok) {
         SpotifyProfile profile;
-        ok = spotify_fetch_profile(tokens_, profile, error);
+        ok = spotify_fetch_profile(curl_, tokens_, profile, error);
         if (ok) display_name = profile.display_name;
     }
 
@@ -146,27 +207,27 @@ void SpotifyMusicProvider::perform_action(Action action) {
         case Action::None:
             return;
         case Action::TogglePlayback:
-            spotify_player_command(tokens_, "PUT", currently_playing ? "/pause" : "/play", error);
+            spotify_player_command(curl_, tokens_, "PUT", currently_playing ? "/pause" : "/play", error);
             break;
         case Action::Next:
-            spotify_player_command(tokens_, "POST", "/next", error);
+            spotify_player_command(curl_, tokens_, "POST", "/next", error);
             break;
         case Action::Previous:
-            spotify_player_command(tokens_, "POST", "/previous", error);
+            spotify_player_command(curl_, tokens_, "POST", "/previous", error);
             break;
         case Action::SeekBack: {
             const auto position = std::max(0, current_progress_ms - kSeekStepMs);
-            spotify_player_command(tokens_, "PUT", "/seek?position_ms=" + std::to_string(position), error);
+            spotify_player_command(curl_, tokens_, "PUT", "/seek?position_ms=" + std::to_string(position), error);
             break;
         }
         case Action::SeekForward: {
             const auto position = std::min(current_duration_ms, current_progress_ms + kSeekStepMs);
-            spotify_player_command(tokens_, "PUT", "/seek?position_ms=" + std::to_string(position), error);
+            spotify_player_command(curl_, tokens_, "PUT", "/seek?position_ms=" + std::to_string(position), error);
             break;
         }
         case Action::ToggleMute: {
             const auto target = currently_muted ? std::max(current_volume, kVolumeStepPercent) : 0;
-            spotify_player_command(tokens_, "PUT", "/volume?volume_percent=" + std::to_string(target), error);
+            spotify_player_command(curl_, tokens_, "PUT", "/volume?volume_percent=" + std::to_string(target), error);
             std::lock_guard<std::mutex> lock(mutex_);
             muted_ = !currently_muted;
             break;
@@ -175,7 +236,7 @@ void SpotifyMusicProvider::perform_action(Action action) {
         case Action::VolumeDown: {
             const auto delta = action == Action::VolumeUp ? kVolumeStepPercent : -kVolumeStepPercent;
             const auto target = std::clamp(current_volume + delta, 0, 100);
-            spotify_player_command(tokens_, "PUT", "/volume?volume_percent=" + std::to_string(target), error);
+            spotify_player_command(curl_, tokens_, "PUT", "/volume?volume_percent=" + std::to_string(target), error);
             std::lock_guard<std::mutex> lock(mutex_);
             muted_ = false;
             break;
@@ -189,7 +250,7 @@ void SpotifyMusicProvider::perform_action(Action action) {
 void SpotifyMusicProvider::poll_playback_state() {
     SpotifyPlaybackState state;
     std::string error;
-    if (!spotify_fetch_playback_state(tokens_, state, error)) {
+    if (!spotify_fetch_playback_state(curl_, tokens_, state, error)) {
         return; // transient failure; keep showing the last known state
     }
 
@@ -218,21 +279,25 @@ void SpotifyMusicProvider::maybe_download_artwork(const std::string& track_id, c
             return; // already have (or already tried) this track's art
         }
     }
-    if (artwork_url.empty()) {
+    if (artwork_url.empty() || !is_safe_track_id(track_id)) {
         std::lock_guard<std::mutex> lock(mutex_);
         artwork_path_.clear();
         return;
     }
 
+    // Deliberately unlocked across this blocking network call — holding
+    // mutex_ here would stall every LVGL-thread read (volume()/playing()/
+    // status_text()/etc., all of which lock it) for up to the download
+    // timeout, freezing the UI for something the user isn't even waiting on.
     const auto dest = artwork_cache_path(track_id);
     std::string error;
+    const bool downloaded = spotify_download_artwork(curl_, artwork_url, dest, error);
+    if (downloaded) {
+        prune_artwork_cache();
+    }
+
     std::lock_guard<std::mutex> lock(mutex_);
-    if (spotify_download_artwork(artwork_url, dest, error)) {
-        artwork_path_ = dest.string();
-    }
-    else {
-        artwork_path_.clear();
-    }
+    artwork_path_ = downloaded ? dest.string() : std::string{};
 }
 
 void SpotifyMusicProvider::deliver_result(void* user_data) {

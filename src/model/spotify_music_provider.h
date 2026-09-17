@@ -9,6 +9,8 @@
 #include "music_provider.h"
 #include "spotify_token_store.h"
 
+#include <curl/curl.h>
+
 #include <condition_variable>
 #include <functional>
 #include <mutex>
@@ -104,7 +106,11 @@ private:
     bool snapshot_has_active_playback_{false};
 
     // Worker-thread-only; no synchronization needed (single owner thread).
+    // One handle reused for every call this thread makes, so curl can keep
+    // the TLS connection to Spotify alive between polls instead of paying a
+    // full handshake every few seconds.
     SpotifyTokens tokens_;
+    CURL* curl_{nullptr};
 
     std::thread worker_;
     std::function<void()> on_change_;
