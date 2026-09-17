@@ -158,3 +158,10 @@ TODO
 *.key
 credentials*.json
 tokens*.json
+
+# Downloaded Spotify album art cache (personal, regenerated at runtime)
+config/spotify-art-cache/
+
+# Python bytecode cache
+__pycache__/
+*.pyc

@@ -12,6 +12,13 @@
 
 #include "lvgl.h"
 
+#include <memory>
+#include <string>
+
+namespace model {
+class SpotifyMusicProvider;
+}
+
 namespace viewmodel {
 
 class BaseViewModel {
@@ -38,7 +45,10 @@ public:
     static const char* source_name(int index) { return index == 1 ? "Jellyfin" : "Spotify"; }
     const char* source_name() const { return source_name(source_index_); }
     bool handle_music_key(uint32_t key, bool long_pressed = false);
-    const model::FakeMusicProvider& music() const { return music_sources_[source_index_]; }
+    const model::MusicProvider& music() const;
+
+    // Real Spotify sign-in status (Phase 1: auth only, not live playback).
+    std::string spotify_status_text() const;
 
     bool is_dark_mode() const;
     void set_dark_mode(bool enabled);
@@ -58,8 +68,9 @@ private:
     void publish_all();
 
     model::BaseModel model_;
-    model::FakeMusicProvider& mutable_music() { return music_sources_[source_index_]; }
+    model::MusicProvider& mutable_music();
     std::array<model::FakeMusicProvider, source_count> music_sources_{};
+    std::unique_ptr<model::SpotifyMusicProvider> spotify_link_;
     int source_index_{0};
     reactive::IntSubject music_changed_{0};
     int source_cursor_{0};

@@ -114,6 +114,23 @@ if(USE_DESKTOP)
     find_package(ZLIB REQUIRED)
 
     # =========================
+    # CURL (Spotify HTTPS client)
+    # =========================
+    find_package(CURL REQUIRED)
+
+    # =========================
+    # nlohmann-json (Spotify token/API JSON)
+    # =========================
+    find_package(nlohmann_json CONFIG REQUIRED)
+
+    # =========================
+    # Threads (Spotify background worker)
+    # =========================
+    find_package(Threads REQUIRED)
+
+    set(SPOTIFY_DEPS CURL::libcurl nlohmann_json::nlohmann_json Threads::Threads)
+
+    # =========================
     # Link safely
     # =========================
     set(LVGL_DESKTOP_DEPS
@@ -282,6 +299,34 @@ else()
     endif()
     cm0_add_imported_library(ZLIB::ZLIB "${ZLIB_LIBRARY}" "${ZLIB_INCLUDE_DIR}")
 
+    cm0_find_header(CURL_INCLUDE_DIR curl/curl.h
+        "${CM0_SYSROOT}/usr/include"
+    )
+    cm0_find_library(CURL_LIBRARY curl libcurl.so libcurl.so.4)
+    if(NOT CURL_INCLUDE_DIR OR NOT CURL_LIBRARY)
+        message(FATAL_ERROR
+            "Missing curl header/library in BSP sysroot: ${CM0_SYSROOT}\n"
+            "Install a libcurl4-openssl-dev equivalent in the BSP image before "
+            "building Spotify support for real hardware."
+        )
+    endif()
+    cm0_add_imported_library(CM0::CURL "${CURL_LIBRARY}" "${CURL_INCLUDE_DIR}")
+
+    cm0_find_header(NLOHMANN_JSON_INCLUDE_DIR nlohmann/json.hpp
+        "${CM0_SYSROOT}/usr/include"
+    )
+    if(NOT NLOHMANN_JSON_INCLUDE_DIR)
+        message(FATAL_ERROR
+            "Missing nlohmann/json.hpp in BSP sysroot: ${CM0_SYSROOT}\n"
+            "Install a nlohmann-json3-dev equivalent in the BSP image before "
+            "building Spotify support for real hardware."
+        )
+    endif()
+    add_library(CM0::JSON INTERFACE IMPORTED)
+    set_target_properties(CM0::JSON PROPERTIES
+        INTERFACE_INCLUDE_DIRECTORIES "${NLOHMANN_JSON_INCLUDE_DIR}"
+    )
+
     set(CM0_MULTIARCH_INCLUDE_DIRS)
     foreach(CM0_INCLUDE_DIR IN ITEMS
             "${CM0_SYSROOT}/usr/include/${CM0_MULTIARCH}"
@@ -338,6 +383,8 @@ else()
 
     set(PLATFORM_INCLUDE_DIR ${CM0_MULTIARCH_INCLUDE_DIRS})
     set(PLATFORM_LIBS ${PTHREAD_LIBRARY} ${M_LIBRARY})
+
+    set(SPOTIFY_DEPS CM0::CURL CM0::JSON ${PTHREAD_LIBRARY})
 
     set(LVGL_INCLUDE_DIR
         ${FREETYPE_INCLUDE_DIR}
@@ -421,6 +468,7 @@ target_compile_definitions(${PROJECT_NAME}_platform
         APP_FRAMEBUFFER_DEVICE="${APP_FRAMEBUFFER_DEVICE}"
         APP_DRM_DEVICE="${APP_DRM_DEVICE}"
         APP_DRM_CONNECTOR_ID=${APP_DRM_CONNECTOR_ID}
+        APP_CONFIG_FILE="${APP_CONFIG_FILE}"
 )
 
 target_link_libraries(${PROJECT_NAME}_platform
@@ -444,6 +492,13 @@ add_library(${PROJECT_NAME}_model
 target_include_directories(${PROJECT_NAME}_model
     PUBLIC
         "${CMAKE_CURRENT_SOURCE_DIR}/src/model"
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/platform"
+)
+
+target_link_libraries(${PROJECT_NAME}_model
+    PUBLIC
+        ${SPOTIFY_DEPS}
+        ${PROJECT_NAME}_platform
 )
 
 # ====================================================
@@ -598,6 +653,7 @@ target_link_libraries(${PROJECT_NAME}_core
         ${PROJECT_NAME}_view
         ${PROJECT_NAME}_viewmodel
         ${PROJECT_NAME}_platform
+        ${SPOTIFY_DEPS}
 )
 
 if(USE_DESKTOP)
@@ -646,12 +702,23 @@ if(BUILD_TESTING AND USE_DESKTOP)
     add_test(NAME jellyzero_png_error COMMAND jellyzero_png_error_tests
         "${CMAKE_CURRENT_BINARY_DIR}/png-error-regression.png")
 
+    add_executable(jellyzero_spotify_token_store_tests tests/spotify_token_store_test.cpp)
+    target_link_libraries(jellyzero_spotify_token_store_tests PRIVATE ${PROJECT_NAME}_model)
+    add_test(NAME jellyzero_spotify_token_store COMMAND jellyzero_spotify_token_store_tests)
+
     find_package(Python3 QUIET COMPONENTS Interpreter)
     if(Python3_Interpreter_FOUND AND CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
         add_test(NAME jellyzero_evdev_enter COMMAND "${Python3_EXECUTABLE}"
             "${CMAKE_CURRENT_SOURCE_DIR}/tests/evdev_enter_test.py"
             --lvgl-dir "${LVGL_SOURCE_DIR}")
         set_tests_properties(jellyzero_evdev_enter PROPERTIES
+            WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
+    endif()
+
+    if(Python3_Interpreter_FOUND)
+        add_test(NAME jellyzero_pkce COMMAND "${Python3_EXECUTABLE}"
+            "${CMAKE_CURRENT_SOURCE_DIR}/tests/pkce_test.py")
+        set_tests_properties(jellyzero_pkce PROPERTIES
             WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
     endif()
 endif()

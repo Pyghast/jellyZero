@@ -6,6 +6,7 @@
 
 #include "base_viewmodel.h"
 #include "linux_input.h"
+#include "spotify_music_provider.h"
 
 namespace viewmodel {
 namespace {
@@ -24,9 +25,30 @@ BaseViewModel::BaseViewModel()
       counter_subject_(0),
       bold_text_subject_(false),
       info_visible_subject_(false),
-      quit_requested_subject_(false) {}
+      quit_requested_subject_(false),
+      spotify_link_(std::make_unique<model::SpotifyMusicProvider>()) {
+    spotify_link_->set_on_change([this] { music_changed_.notify(); });
+}
 
 BaseViewModel::~BaseViewModel() = default;
+
+std::string BaseViewModel::spotify_status_text() const {
+    return spotify_link_->status_text();
+}
+
+const model::MusicProvider& BaseViewModel::music() const {
+    if (source_index_ == 0 && spotify_link_->signed_in()) {
+        return *spotify_link_;
+    }
+    return music_sources_[source_index_];
+}
+
+model::MusicProvider& BaseViewModel::mutable_music() {
+    if (source_index_ == 0 && spotify_link_->signed_in()) {
+        return *spotify_link_;
+    }
+    return music_sources_[source_index_];
+}
 
 lv_subject_t* BaseViewModel::title_subject() {
     return title_subject_.native();

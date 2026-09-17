@@ -16,6 +16,9 @@
 #include "base_viewmodel.h"
 #include "theme.h"
 #include "toast.h"
+#include "user_config.h"
+
+#include <curl/curl.h>
 
 #include <cstdlib>
 #include <filesystem>
@@ -65,23 +68,20 @@ struct DarkModePersistence {
     bool last_dark_mode;
 };
 
+// Must init before, and clean up after, every other local in run() —
+// SpotifyMusicProvider (owned transitively by view_model) uses curl on a
+// background thread for as long as it lives. Declared first so it is
+// destroyed last.
+struct CurlGlobalGuard {
+    CurlGlobalGuard() { curl_global_init(CURL_GLOBAL_DEFAULT); }
+    ~CurlGlobalGuard() { curl_global_cleanup(); }
+};
+
 std::string writable_config_path() {
 #if USE_DESKTOP
     return APP_CONFIG_FILE;
 #else
-    if (const char* xdg_config_home = std::getenv("XDG_CONFIG_HOME")) {
-        const std::filesystem::path root(xdg_config_home);
-        if (!root.empty() && root.is_absolute()) {
-            return (root / "template-app" / "template-app.conf").string();
-        }
-    }
-    if (const char* home = std::getenv("HOME")) {
-        const std::filesystem::path root(home);
-        if (!root.empty() && root.is_absolute()) {
-            return (root / ".config" / "template-app" / "template-app.conf").string();
-        }
-    }
-    return APP_CONFIG_FILE;
+    return (platform::user_config_dir() / "template-app.conf").string();
 #endif
 }
 
@@ -266,6 +266,8 @@ lv_display_t* init_device_display() {
 int Application::run() {
     logger::Logger::init();
     logger::Logger::set_tag("template");
+
+    CurlGlobalGuard curl_guard;
 
     lv_init();
 

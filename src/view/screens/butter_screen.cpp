@@ -36,8 +36,13 @@ void ButterScreen::build_content(lv_obj_t* content) {
 }
 
 void ButterScreen::refresh() {
-    lv_label_set_text(connection_status_, view_model().source_cursor() == 0
-        ? "Spotify: sign-in not configured" : "Jellyfin: server not configured");
+    if (view_model().source_cursor() == 0) {
+        const auto status = view_model().spotify_status_text();
+        lv_label_set_text(connection_status_, status.c_str());
+    }
+    else {
+        lv_label_set_text(connection_status_, "Jellyfin: server not configured");
+    }
     for (size_t i = 0; i < sources_.size(); ++i) {
         const auto index = static_cast<int>(i);
         lv_label_set_text_fmt(sources_[i], "%s %s%s",
