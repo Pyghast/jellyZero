@@ -10,6 +10,7 @@ struct Track {
     const char* artist;
     const char* album;
     int duration_seconds;
+    const char* artwork_path; // Cached local image; empty means unknown artwork.
 };
 
 // Local fixtures only. No Spotify session, audio output or network access.
@@ -26,18 +27,13 @@ public:
         elapsed_ = static_cast<int>(std::clamp(static_cast<long long>(elapsed_) + seconds,
             0LL, static_cast<long long>(current_track().duration_seconds)));
     }
-    int volume() const { return volume_; }
+    int volume() const { return muted_ ? 0 : volume_; }
+    bool muted() const { return muted_; }
+    void toggle_mute() { muted_ = !muted_; }
     void change_volume(int delta) {
+        muted_ = false;
         volume_ = static_cast<int>(std::clamp(static_cast<long long>(volume_) + delta, 0LL, 100LL));
     }
-    static constexpr int device_count = 3;
-    static const char* device_name(int index) {
-        constexpr std::array<const char*, device_count> devices{"Desktop", "Living room", "Phone"};
-        return devices[std::clamp(index, 0, device_count - 1)];
-    }
-    int device_index() const { return device_index_; }
-    const char* device() const { return device_name(device_index_); }
-    void select_device(int index) { device_index_ = std::clamp(index, 0, device_count - 1); }
     bool playing() const { return playing_; }
     void toggle_playback() { playing_ = !playing_; }
     int elapsed_seconds() const { return elapsed_; }
@@ -46,14 +42,14 @@ private:
     std::size_t track_index_{0};
     int elapsed_{102};
     int volume_{50};
-    int device_index_{0};
+    bool muted_{false};
     const std::array<Track, 6> tracks_{{
-        {"MONEY FOR NOTHING", "Dire Straits", "Brothers in Arms", 306},
-        {"WALK OF LIFE", "Dire Straits", "Brothers in Arms", 249},
-        {"LEMONADE", "Demo artist", "Demo album", 210},
-        {"THUNDERSTRUCK", "AC/DC", "The Razors Edge", 292},
-        {"AEIOU", "Demo artist", "Demo album", 240},
-        {"SULTANS OF SWING", "Dire Straits", "Dire Straits", 348},
+        {"MONEY FOR NOTHING", "Dire Straits", "Brothers in Arms", 306, "images/demo-cover-purple.png"},
+        {"WALK OF LIFE", "Dire Straits", "Brothers in Arms", 249, "images/demo-cover-purple.png"},
+        {"LEMONADE", "Demo artist", "Demo album", 210, ""},
+        {"THUNDERSTRUCK", "AC/DC", "The Razors Edge", 292, "images/demo-cover-blue.png"},
+        {"AEIOU", "Demo artist", "Demo album", 240, ""},
+        {"SULTANS OF SWING", "Dire Straits", "Dire Straits", 348, ""},
     }};
 };
 

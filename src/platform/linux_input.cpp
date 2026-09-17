@@ -5,6 +5,10 @@
 #include <cstdio>
 #include <cstring>
 
+#if USE_DESKTOP
+#include <SDL_keycode.h>
+#endif
+
 #if !USE_DESKTOP
 #include <cerrno>
 #include <dirent.h>
@@ -124,6 +128,32 @@ void ensure_long_press_timer() {
 }
 
 void route_key_state(uint32_t key, bool pressed) {
+#if USE_DESKTOP
+    // Normalize before hold tracking so both listeners see platform key values.
+    switch (key) {
+        case SDLK_MUTE:
+        case SDLK_AUDIOMUTE:
+            key = kKeyMute;
+            break;
+        case SDLK_VOLUMEDOWN:
+            key = kKeyVolumeDown;
+            break;
+        case SDLK_VOLUMEUP:
+            key = kKeyVolumeUp;
+            break;
+        case SDLK_AUDIOPLAY:
+            key = kKeyPlayPause;
+            break;
+        case SDLK_AUDIONEXT:
+            key = kKeyNextTrack;
+            break;
+        case SDLK_AUDIOPREV:
+            key = kKeyPreviousTrack;
+            break;
+        default:
+            break;
+    }
+#endif
     const bool new_hold = pressed && (!last_key_pressed || pressed_key != key);
     if (new_hold) {
         pressed_key = key;
@@ -215,6 +245,18 @@ uint32_t map_evdev_key(uint16_t code) {
             return kKeyPrintScreen;
         case KEY_HELP:
             return kKeyHelp;
+        case KEY_MUTE:
+            return kKeyMute;
+        case KEY_VOLUMEDOWN:
+            return kKeyVolumeDown;
+        case KEY_VOLUMEUP:
+            return kKeyVolumeUp;
+        case KEY_PLAYPAUSE:
+            return kKeyPlayPause;
+        case KEY_NEXTSONG:
+            return kKeyNextTrack;
+        case KEY_PREVIOUSSONG:
+            return kKeyPreviousTrack;
         default:
             return 0;
     }
@@ -429,6 +471,18 @@ const char* describe_key(uint32_t key) {
             return "PrintScreen";
         case kKeyHelp:
             return "Help";
+        case kKeyMute:
+            return "Mute";
+        case kKeyVolumeDown:
+            return "VolumeDown";
+        case kKeyVolumeUp:
+            return "VolumeUp";
+        case kKeyPlayPause:
+            return "PlayPause";
+        case kKeyNextTrack:
+            return "NextTrack";
+        case kKeyPreviousTrack:
+            return "PreviousTrack";
         default:
             break;
     }

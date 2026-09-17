@@ -57,10 +57,9 @@ void AppleScreen::build_content(lv_obj_t* content) {
     lv_obj_set_style_bg_color(progress_, lv_color_hex(0x483cde), LV_PART_INDICATOR);
 
     artwork_ = lv_image_create(content);
-    const auto path = assets().resolve("images/demo-reference-cover.png");
-    const std::string source = "A:" + path.generic_string();
-    lv_image_set_src(artwork_, source.c_str());
-    lv_obj_set_pos(artwork_, 128, 35);
+    lv_obj_set_pos(artwork_, 128, 33);
+    lv_obj_set_size(artwork_, 64, 64);
+    source_badge_ = make_label("", 125, 98, 88, 10);
 
     auto* divider = lv_obj_create(content);
     lv_obj_remove_style_all(divider);
@@ -79,6 +78,18 @@ void AppleScreen::build_content(lv_obj_t* content) {
 void AppleScreen::refresh() {
     const auto& music = view_model().music();
     const auto& track = music.current_track();
+    lv_label_set_text_fmt(source_badge_, "%s / demo", view_model().source_name());
+    // Resolve/decode only when track metadata changes, not on every volume key.
+    if (artwork_source_.empty() || artwork_key_ != track.artwork_path) {
+        artwork_key_ = track.artwork_path;
+        auto cover = artwork_key_.empty() ? std::filesystem::path{} : assets().resolve(artwork_key_);
+        if (cover.empty()) cover = assets().resolve("images/no-cover.png");
+        const auto source = "A:" + cover.generic_string();
+        if (source != artwork_source_) {
+            artwork_source_ = source;
+            lv_image_set_src(artwork_, artwork_source_.c_str());
+        }
+    }
     lv_label_set_text(title_, lowercase(track.title).c_str());
     lv_label_set_text(artist_, lowercase(track.artist).c_str());
     lv_label_set_text(album_, lowercase(track.album).c_str());

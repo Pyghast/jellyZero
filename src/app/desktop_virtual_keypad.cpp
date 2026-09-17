@@ -184,11 +184,11 @@ uint32_t fn_key_for(char key) {
         case 'p':
             return SDLK_F12;
         case 'a':
-            return SDLK_MUTE;
+            return platform::kKeyMute;
         case 's':
-            return SDLK_VOLUMEDOWN;
+            return platform::kKeyVolumeDown;
         case 'd':
-            return SDLK_VOLUMEUP;
+            return platform::kKeyVolumeUp;
         case 'f':
             return LV_KEY_UP;
         case 'h':
@@ -274,11 +274,11 @@ std::string output_key_name(uint32_t key) {
             return "media-previous";
         case SDLK_AUDIONEXT:
             return "media-next";
-        case SDLK_MUTE:
+        case platform::kKeyMute:
             return "mute";
-        case SDLK_VOLUMEDOWN:
+        case platform::kKeyVolumeDown:
             return "volume-down";
-        case SDLK_VOLUMEUP:
+        case platform::kKeyVolumeUp:
             return "volume-up";
         case SDLK_BRIGHTNESSDOWN:
             return "brightness-down";

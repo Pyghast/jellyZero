@@ -43,7 +43,9 @@ install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/assets/fonts/Phosphor-Fill.ttf"
     DESTINATION "${CMAKE_INSTALL_DATADIR}/${APP_NAME}/fonts"
 )
 install(FILES
-    "${CMAKE_CURRENT_SOURCE_DIR}/assets/images/demo-reference-cover.png"
+    "${CMAKE_CURRENT_SOURCE_DIR}/assets/images/demo-cover-purple.png"
+    "${CMAKE_CURRENT_SOURCE_DIR}/assets/images/demo-cover-blue.png"
+    "${CMAKE_CURRENT_SOURCE_DIR}/assets/images/no-cover.png"
     "${CMAKE_CURRENT_SOURCE_DIR}/assets/images/jellyzero.png"
     "${CMAKE_CURRENT_SOURCE_DIR}/assets/images/jellyzero_80.png"
     "${CMAKE_CURRENT_SOURCE_DIR}/assets/images/jellyzero_100.png"

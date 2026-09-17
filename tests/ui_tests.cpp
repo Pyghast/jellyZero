@@ -96,7 +96,17 @@ int main() {
             "queue entries truncate on one line, never wrap into adjacent rows");
         check(label(screen.root(), LV_SYMBOL_PAUSE), "playing demo offers pause");
         auto* record = artwork(screen.root());
-        check(record && lv_obj_get_width(record) == 64 && lv_obj_get_height(record) == 68, "reference artwork decodes at the intended size");
+        check(record && lv_obj_get_width(record) == 64 && lv_obj_get_height(record) == 64, "track artwork uses a square album-cover box");
+        check(label(screen.root(), "Spotify / demo"), "Now Playing identifies the source and demo state");
+        const std::string first_cover(static_cast<const char*>(lv_image_get_src(record)));
+        keypad.emit_key('7');
+        check(first_cover == static_cast<const char*>(lv_image_get_src(record)), "tracks on the same album share cover artwork");
+        keypad.emit_key('7');
+        check(first_cover != static_cast<const char*>(lv_image_get_src(record)), "a track with no cover replaces stale album artwork with a placeholder");
+        keypad.emit_key('7');
+        check(first_cover != static_cast<const char*>(lv_image_get_src(record)), "a different album changes the artwork source");
+        keypad.emit_key('5'); keypad.emit_key('5'); keypad.emit_key('5');
+        check(first_cover == static_cast<const char*>(lv_image_get_src(record)), "previous restores the corresponding album artwork");
         lv_tick_inc(80); lv_timer_handler();
         check(lv_image_get_rotation(record) == 0, "album artwork remains upright while playing");
         keypad.emit_key('6');
@@ -127,11 +137,30 @@ int main() {
         check(label(screen.root(), "00:00 / 5:06"), "seek clamps at zero");
         for (int i = 0; i < 40; ++i) keypad.emit_key(LV_KEY_RIGHT);
         check(vm.music().elapsed_seconds() == 306, "seek clamps at duration");
-        keypad.emit_key(LV_KEY_UP);
+        check(vm.handle_music_key(platform::kKeyMute), "mute key is routed to music volume");
+        check(vm.music().volume() == 0, "mute sets effective volume to zero");
+        vm.handle_music_key(platform::kKeyMute, true);
+        check(vm.music().volume() == 0, "held mute does not toggle again");
+        vm.handle_music_key(platform::kKeyMute);
+        check(vm.music().volume() == 50, "unmute restores prior volume");
+        auto fn_key = [&](int column) {
+            auto click = [&](int col, int row) {
+                const int x = 8 + col * 57 + 25, y = 195 + row * 49 + 23;
+                keypad.handle_pointer(x, y, true); keypad.handle_pointer(x, y, false);
+            };
+            click(0, 3); click(column, 2);
+        };
+        fn_key(1); check(vm.music().volume() == 0, "physical Fn+A mutes");
+        fn_key(1); check(vm.music().volume() == 50, "physical Fn+A restores volume");
+        fn_key(2); check(vm.music().volume() == 45, "physical Fn+S decreases volume");
+        fn_key(3); check(vm.music().volume() == 50, "physical Fn+D increases volume");
+        check(!vm.handle_music_key(LV_KEY_UP) && !vm.handle_music_key(LV_KEY_DOWN),
+              "arrows no longer change playback volume");
+        keypad.emit_key(platform::kKeyVolumeUp);
         check(label(lv_obj_get_parent(label(screen.root(), "money for nothing")), "55%"), "up changes local volume");
-        for (int i = 0; i < 30; ++i) keypad.emit_key(LV_KEY_UP);
+        for (int i = 0; i < 30; ++i) keypad.emit_key(platform::kKeyVolumeUp);
         check(label(lv_obj_get_parent(label(screen.root(), "money for nothing")), "100%"), "volume clamps at 100");
-        for (int i = 0; i < 30; ++i) keypad.emit_key(LV_KEY_DOWN);
+        for (int i = 0; i < 30; ++i) keypad.emit_key(platform::kKeyVolumeDown);
         check(label(lv_obj_get_parent(label(screen.root(), "money for nothing")), "0%"), "volume clamps at zero");
         keypad.emit_key_state('6', true);
         keypad.emit_key_state('6', true);
@@ -149,8 +178,9 @@ int main() {
         check(label(lv_layer_top(), "Prev / Play-pause / Next"), "help documents playback controls");
         check(label(lv_layer_top(), "5 / 6 / 7"), "help documents corrected playback keys");
         check(label(lv_layer_top(), "8"), "help documents corrected device key");
+        check(label(lv_layer_top(), "Fn A/S/D"), "help documents physical volume shortcuts");
         help.show(model::AppPage::Butter);
-        check(label(lv_layer_top(), "Select device"), "help documents device selection");
+        check(label(lv_layer_top(), "Select source"), "help documents provider selection");
     }
     {
         app::AssetManager assets;
@@ -163,7 +193,9 @@ int main() {
         keypad.emit_key('8');
         manager.flush_requested_page();
         check(vm.current_page() == model::AppPage::Butter, "8 opens device selector");
-        check(label(manager.current_screen(), "DEMO DEVICES / no Spotify connection"), "devices clearly marked fake");
+        check(label(manager.current_screen(), "MUSIC SOURCE / offline preview"), "source chooser discloses offline preview");
+        check(label_start(manager.current_screen(), "> Spotify"), "Spotify is the initial source choice");
+        check(label_start(manager.current_screen(), "  Jellyfin"), "Jellyfin is a source, not a playback device");
         lv_obj_update_layout(manager.current_screen()); check_layout(manager.current_screen());
         auto* device_nav = lv_obj_get_parent(lv_obj_get_parent(label(manager.current_screen(), "UP")));
         for (int i = 0; i < 5; ++i) {
@@ -195,15 +227,29 @@ int main() {
         // Click the actual simulator key6 hitbox, not a navbar-relative proxy.
         keypad.handle_pointer(8 + 5 * 57 + 25, 195 + 23, true);
         keypad.handle_pointer(8 + 5 * 57 + 25, 195 + 23, false);
-        check(vm.device_cursor() == 1, "physical key6 selects next device");
+        check(vm.source_cursor() == 1, "physical key6 selects next device");
         keypad.handle_pointer(8 + 4 * 57 + 25, 195 + 23, true);
         keypad.handle_pointer(8 + 4 * 57 + 25, 195 + 23, false);
         manager.flush_requested_page();
-        check(std::strcmp(vm.music().device(), "Living room") == 0, "selected device shown on Now Playing");
+        check(std::strcmp(vm.source_name(), "Jellyfin") == 0, "selected provider is Jellyfin");
+        check(label(manager.current_screen(), "Jellyfin / demo"), "source badge follows provider selection");
+        keypad.emit_key(platform::kKeyVolumeDown);
+        keypad.emit_key('8'); manager.flush_requested_page();
+        const auto cursor_before_volume = vm.source_cursor();
+        keypad.emit_key(platform::kKeyMute);
+        check(vm.source_cursor() == cursor_before_volume && vm.music().volume() == 0,
+              "volume controls act on current source without moving chooser cursor");
+        keypad.emit_key(platform::kKeyMute);
+        keypad.emit_key('4'); keypad.emit_key('5'); manager.flush_requested_page();
+        check(vm.source_index() == 0 && vm.music().volume() == 50, "Spotify retains its own preview volume");
+        keypad.emit_key('8'); manager.flush_requested_page();
+        keypad.emit_key('6'); keypad.emit_key('5'); manager.flush_requested_page();
+        check(vm.source_index() == 1 && vm.music().volume() == 45, "Jellyfin retains its own preview volume");
+        keypad.emit_key(platform::kKeyVolumeUp);
         keypad.emit_key('8'); manager.flush_requested_page();
         keypad.emit_key(LV_KEY_DOWN);
         keypad.emit_key(LV_KEY_ESC); manager.flush_requested_page();
-        check(std::strcmp(vm.music().device(), "Living room") == 0, "ESC cancels device change");
+        check(std::strcmp(vm.source_name(), "Jellyfin") == 0, "ESC cancels provider change");
         check(label(manager.current_screen(), "01:42 / 5:06"), "page changes preserve playback position");
         for (int i = 0; i < 20; ++i) {
             keypad.emit_key('8'); manager.flush_requested_page();
@@ -229,7 +275,7 @@ int main() {
         lv_mem_monitor(&before);
         for (int i = 0; i < 500; ++i) {
             keypad.emit_key('8'); pump_page();
-            check(label(manager.current_screen(), "DEMO DEVICES / no Spotify connection"),
+            check(label(manager.current_screen(), "MUSIC SOURCE / offline preview"),
                   "async churn loads the device screen");
             keypad.emit_key('7'); pump_page();
             check(label(manager.current_screen(), "money for nothing"),
@@ -286,8 +332,8 @@ int main() {
         physical(7);
         check(std::strcmp(vm.music().current_track().title, "MONEY FOR NOTHING") == 0, "physical7 is next");
         physical(8); check(vm.current_page() == model::AppPage::Butter, "physical8 opens devices");
-        const auto cursor = vm.device_cursor();
-        physical(8); check(vm.current_page() == model::AppPage::Butter && vm.device_cursor() == cursor,
+        const auto cursor = vm.source_cursor();
+        physical(8); check(vm.current_page() == model::AppPage::Butter && vm.source_cursor() == cursor,
             "device blank key8 has no action");
         physical(4); check(!lv_subject_get_int(vm.quit_requested_subject()), "device key4 moves selection, never exits");
         physical(5); check(vm.current_page() == model::AppPage::Apple, "device key5 still confirms");

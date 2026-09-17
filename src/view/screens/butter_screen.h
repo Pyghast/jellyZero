@@ -19,7 +19,8 @@ private:
     void build_content(lv_obj_t* content) override;
     static void music_changed_cb(lv_observer_t* observer, lv_subject_t* subject);
     void refresh();
-    std::array<lv_obj_t*, model::FakeMusicProvider::device_count> devices_{};
+    lv_obj_t* connection_status_{nullptr};
+    std::array<lv_obj_t*, viewmodel::BaseViewModel::source_count> sources_{};
 };
 
 } // namespace screen

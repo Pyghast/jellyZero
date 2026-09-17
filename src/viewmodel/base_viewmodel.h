@@ -32,9 +32,13 @@ public:
     lv_subject_t* quit_requested_subject();
 
     lv_subject_t* music_subject() { return music_changed_.native(); }
-    int device_cursor() const { return device_cursor_; }
+    static constexpr int source_count = 2;
+    int source_cursor() const { return source_cursor_; }
+    int source_index() const { return source_index_; }
+    static const char* source_name(int index) { return index == 1 ? "Jellyfin" : "Spotify"; }
+    const char* source_name() const { return source_name(source_index_); }
     bool handle_music_key(uint32_t key, bool long_pressed = false);
-    const model::FakeMusicProvider& music() const { return music_; }
+    const model::FakeMusicProvider& music() const { return music_sources_[source_index_]; }
 
     bool is_dark_mode() const;
     void set_dark_mode(bool enabled);
@@ -54,9 +58,11 @@ private:
     void publish_all();
 
     model::BaseModel model_;
-    model::FakeMusicProvider music_;
+    model::FakeMusicProvider& mutable_music() { return music_sources_[source_index_]; }
+    std::array<model::FakeMusicProvider, source_count> music_sources_{};
+    int source_index_{0};
     reactive::IntSubject music_changed_{0};
-    int device_cursor_{0};
+    int source_cursor_{0};
     reactive::StringSubject<32> title_subject_;
     reactive::StringSubject<32> greeting_subject_;
     reactive::BoolSubject dark_mode_subject_;

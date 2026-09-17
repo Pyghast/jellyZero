@@ -5,6 +5,7 @@
  */
 
 #include "base_viewmodel.h"
+#include "linux_input.h"
 
 namespace viewmodel {
 namespace {
@@ -114,17 +115,36 @@ void BaseViewModel::request_quit() {
 }
 
 bool BaseViewModel::handle_music_key(uint32_t key, bool long_pressed) {
+    // Media volume keys apply to the chosen provider on either page.
+    if (key == platform::kKeyMute || key == platform::kKeyVolumeDown || key == platform::kKeyVolumeUp) {
+        if (!long_pressed) {
+            if (key == platform::kKeyMute) mutable_music().toggle_mute();
+            else mutable_music().change_volume(key == platform::kKeyVolumeUp ? 5 : -5);
+            music_changed_.notify();
+        }
+        return true;
+    }
+    // Media playback keys (fn+q/w/e) work like 6/7/5 on either page.
+    if (key == platform::kKeyPlayPause || key == platform::kKeyNextTrack || key == platform::kKeyPreviousTrack) {
+        if (!long_pressed) {
+            if (key == platform::kKeyPlayPause) mutable_music().toggle_playback();
+            else if (key == platform::kKeyNextTrack) mutable_music().next();
+            else mutable_music().previous();
+            music_changed_.notify();
+        }
+        return true;
+    }
     if (current_page() == model::AppPage::Butter) {
         // Consume held keys without repeating one-shot actions.
         switch (key) {
             case '4': case LV_KEY_UP: case LV_KEY_LEFT:
-                if (!long_pressed) device_cursor_ = (device_cursor_ + model::FakeMusicProvider::device_count - 1) % model::FakeMusicProvider::device_count;
+                if (!long_pressed) source_cursor_ = (source_cursor_ + source_count - 1) % source_count;
                 break;
             case '6': case LV_KEY_DOWN: case LV_KEY_RIGHT:
-                if (!long_pressed) device_cursor_ = (device_cursor_ + 1) % model::FakeMusicProvider::device_count;
+                if (!long_pressed) source_cursor_ = (source_cursor_ + 1) % source_count;
                 break;
             case '5': case LV_KEY_ENTER:
-                if (!long_pressed) { music_.select_device(device_cursor_); show_apple_page(); }
+                if (!long_pressed) { source_index_ = source_cursor_; show_apple_page(); }
                 break;
             case '7': case LV_KEY_ESC:
                 if (!long_pressed) show_apple_page();
@@ -136,16 +156,14 @@ bool BaseViewModel::handle_music_key(uint32_t key, bool long_pressed) {
     }
     switch (key) {
         case '4': if (!long_pressed) request_quit(); break;
-        case '5': if (!long_pressed) music_.previous(); break;
-        case '6': if (!long_pressed) music_.toggle_playback(); break;
-        case '7': if (!long_pressed) music_.next(); break;
+        case '5': if (!long_pressed) mutable_music().previous(); break;
+        case '6': if (!long_pressed) mutable_music().toggle_playback(); break;
+        case '7': if (!long_pressed) mutable_music().next(); break;
         case '8':
-            if (!long_pressed) { device_cursor_ = music_.device_index(); show_butter_page(); }
+            if (!long_pressed) { source_cursor_ = source_index_; show_butter_page(); }
             break;
-        case LV_KEY_LEFT: if (!long_pressed) music_.seek_by(-10); break;
-        case LV_KEY_RIGHT: if (!long_pressed) music_.seek_by(10); break;
-        case LV_KEY_UP: if (!long_pressed) music_.change_volume(5); break;
-        case LV_KEY_DOWN: if (!long_pressed) music_.change_volume(-5); break;
+        case LV_KEY_LEFT: if (!long_pressed) mutable_music().seek_by(-10); break;
+        case LV_KEY_RIGHT: if (!long_pressed) mutable_music().seek_by(10); break;
         default: return false;
     }
     if (!long_pressed) music_changed_.notify();
